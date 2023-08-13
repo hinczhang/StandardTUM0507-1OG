@@ -1,13 +1,23 @@
 <template>
-    <div id="container"></div>
-    <!-- <el-dialog title="选择一个选项" v-model="dialogVisible">
-      <el-radio-group v-model="selectedOption">
-        <el-radio label="1">选项 1</el-radio>
-        <el-radio label="2">选项 2</el-radio>
-        <el-radio label="3">选项 3</el-radio>
-      </el-radio-group>
-      <el-button type="primary" @click="closeDialog">确定</el-button>
-    </el-dialog> -->
+    <div style="margin: 0 auto;" id="container"></div>
+    <el-dialog title="选择一个选项" v-model="dialogVisible">
+      <el-row>
+        <el-col>
+          <el-radio-group v-model="selectedOption">
+            <el-radio label="0">Totally wrong</el-radio>
+            <el-radio label="1">Group correct</el-radio>
+            <el-radio label="2">Single correct</el-radio>
+            <el-radio label="3">Information correct</el-radio>
+          </el-radio-group>
+        </el-col>
+      </el-row>
+      <el-row>
+        <el-col>
+          <el-button type="primary" @click="closeDialog">确定</el-button>
+        </el-col>
+      </el-row>
+    </el-dialog>
+    <el-button type="primary" @click="outputData">输出</el-button>
 </template>
 
 <script>
@@ -19,18 +29,48 @@ export default {
     return {
         dialogVisible: false,
         selectedOption: '',
+        selectedCircle: null,
+        layer: null,
     }
   },
   methods: {
+    outputData () {
+      var data = [];
+      this.layer.find('Circle').forEach(function(circle) {
+        data.push(circle.customAttribute);
+      });
+      console.log(data);
+    },
     closeDialog() {
+      var num = parseInt(this.selectedOption); 
+      switch(num) {
+        case 0:
+          this.selectedCircle.fill('red');
+          this.selectedCircle.customAttribute.score = 0;
+          break;
+        case 1:
+          this.selectedCircle.fill('purple');
+          this.selectedCircle.customAttribute.score = 1;
+          break;
+        case 2:
+          this.selectedCircle.fill('green');
+          this.selectedCircle.customAttribute.score = 2;
+          break;
+        case 3:
+          this.selectedCircle.fill('blue');
+          this.selectedCircle.customAttribute.score = 3;
+          break;
+        default:
+          this.selectedCircle.fill('red');
+          this.selectedCircle.customAttribute.score = 0;
+      }
       this.dialogVisible = false;
-      console.log(this.selectedOption);
     },
     async loadJSONData() {
       try {
         const response = await fetch("/landmarks.json");
         this.jsonData = await response.json();
-        console.log("JSON data loaded:", this.jsonData);
+        // console.log("JSON data loaded:", this.jsonData);
         this.drawPoint(this.jsonData);
       } catch (error) {
         console.error("Error loading JSON data:", error);
@@ -68,24 +108,42 @@ export default {
     },
 
     drawPoint(items) {
+      var _this = this;
       items = this.normalizeAndCenterPoints(items);
       const stage = new Konva.Stage({
         container: 'container', // 用于渲染的容器的 id
         width: 900,
         height: 900,
       });
-      const layer = new Konva.Layer();
-      stage.add(layer);
+      _this.layer = new Konva.Layer();
+      stage.add(_this.layer);
       var circleSize = 3;
 
       items.forEach(item => {
-        var circle = new Konva.Circle({
-          x: item.y,
-          y: item.x,
-          radius: circleSize,
-          fill: 'green',
-          draggable: false
-        });
+        var circle = null;
+        if(item.style == 1) {
+          circle = new Konva.Circle({
+            x: item.y,
+            y: item.x,
+            radius: circleSize + 2,
+            fill: 'yellow',
+            draggable: false,
+            stroke: 'black',
+            strokeWidth: 1
+          });
+        } else {
+          circle = new Konva.Circle({
+            x: item.y,
+            y: item.x,
+            radius: circleSize,
+            fill: 'white',
+            draggable: false,
+            stroke: 'black',
+            strokeWidth: 1
+          });
+        }
+        
+        item.score = 0;
         circle.customAttribute = item;
         // 创建提示框
         var tooltip = new Konva.Label({
@@ -106,7 +164,7 @@ export default {
           padding: 4,
           fill: 'white'
         }));
-        layer.add(tooltip);
+        _this.layer.add(tooltip);
 
         // 添加悬停事件监听器
         circle.on('mouseenter', function () {
@@ -115,25 +173,37 @@ export default {
             y: circle.y() + circle.radius() + 10
           });
           tooltip.show();
-          layer.draw();
+          _this.layer.draw();
         });
 
         // 添加离开事件监听器
         circle.on('mouseleave', function () {
           tooltip.hide();
-          layer.draw();
+          _this.layer.draw();
         });
-        layer.add(circle);
+
+        // 添加点击事件监听器
+        circle.on('click', function () {
+          _this.dialogVisible = true;
+          _this.selectedCircle = circle;
+        });
+        _this.layer.add(circle);
       });
 
-      layer.draw();
+      _this.layer.draw();
 
     }
   },
   mounted() {
     this.loadJSONData();
-
-
   },
 }
 </script>
+
+<style>
+
+
+    .konvajs-content {
+      margin: 0 auto;
+    }
+</style>
