@@ -17,11 +17,20 @@
         </el-col>
       </el-row>
     </el-dialog>
-    <el-button type="primary" @click="outputData">输出</el-button>
+    <el-row>
+      <el-button type="primary" @click="outputData">输出</el-button>
+      <el-button type="primary" @click="markRest">标记剩余</el-button>
+      <el-popconfirm title="Are you sure to delete this?" @confirm="clearData">
+        <template #reference>
+          <el-button type="warning">清空</el-button>
+        </template>
+      </el-popconfirm>
+    </el-row>
 </template>
 
 <script>
 import Konva from 'konva';
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 export default {
   name: 'IndoorMap',
@@ -31,15 +40,83 @@ export default {
         selectedOption: '',
         selectedCircle: null,
         layer: null,
+        mainObjNum: 0,
+        secObjNum: 0,
+        jsonData: null,
+        jsonLength: 0
     }
   },
   methods: {
+    markRest () {
+      this.layer.find('Circle').forEach(function(circle) {
+        if(circle.customAttribute.score === 0) {
+          circle.fill('red');
+          circle.customAttribute.score = 0;
+        }
+      });
+    },
+    clearData() {
+      location.reload();
+    },
     outputData () {
       var data = [];
+      var names = []
+      var _this = this;
+      var mainCorrect = 0;
+      var secCorrect = 0;
+      this.matrix = new Array(this.jsonLength);
+      this.precision_score = 0;
       this.layer.find('Circle').forEach(function(circle) {
         data.push(circle.customAttribute);
+        names.push(circle.customAttribute.objectName);
+        if(circle.customAttribute.score >= 1) {
+          if(circle.customAttribute.style === 1) {
+            mainCorrect++;
+          } else {
+            secCorrect++;
+          }
+        } 
+        _this.precision_score += circle.customAttribute.score;
       });
-      console.log(data);
+      for(var i = 0; i < this.jsonLength; i++) {
+        this.matrix[i] = new Array(this.jsonLength);
+        for(var j = 0; j < this.jsonLength; j++) {
+          this.matrix[i][j] = (data[i].score === 0 || data[j].score === 0) ? 0 : (data[i].score + data[j].score) / 2;
+        }
+      }
+      console.log(this.matrix);
+      var downloadData = {
+        obj_names: names,
+        matrix: this.matrix,
+        number_score: (mainCorrect + secCorrect) / this.jsonLength,
+        main_score: mainCorrect / this.mainObjNum,
+        sec_score: secCorrect / this.secObjNum,
+        pre_score: this.precision_score / (3 * this.jsonLength)
+      };
+
+
+      ElMessageBox.prompt('Please input your file name', 'Tip', {
+        confirmButtonText: 'OK',
+        cancelButtonText: 'Cancel',
+      })
+        .then(({ value }) => {
+          downloadData.name = value;
+          var jsonData = JSON.stringify(downloadData, null, 2); // 第二个参数表示格式化缩进
+          const blob = new Blob([jsonData], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = value + ".json"; // 下载文件的名称
+          a.click();
+
+          URL.revokeObjectURL(url);
+        })
+        .catch(() => {
+          ElMessage({
+            type: 'info',
+            message: 'Input canceled',
+          })
+        })
     },
     closeDialog() {
       var num = parseInt(this.selectedOption); 
@@ -70,6 +147,7 @@ export default {
       try {
         const response = await fetch("/landmarks.json");
         this.jsonData = await response.json();
+        this.jsonLength = this.jsonData.length;
         // console.log("JSON data loaded:", this.jsonData);
         this.drawPoint(this.jsonData);
       } catch (error) {
@@ -122,6 +200,7 @@ export default {
       items.forEach(item => {
         var circle = null;
         if(item.style == 1) {
+          _this.mainObjNum++;
           circle = new Konva.Circle({
             x: item.y,
             y: item.x,
@@ -132,6 +211,7 @@ export default {
             strokeWidth: 1
           });
         } else {
+          _this.secObjNum++;
           circle = new Konva.Circle({
             x: item.y,
             y: item.x,
